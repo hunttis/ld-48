@@ -7,13 +7,28 @@ import {
   createWheels,
   createDustEmitter,
   createCrumbleEmitter,
+  createAnimations,
+  createSparkEmitter,
+  createBloodEmitter,
+  createPuffEmitter,
 } from "./game/Decoration";
+import Lifebar from "./game/Lifebar";
+import Player from "./game/Player";
 
 export default class Game extends Phaser.Scene {
-  controls!: Phaser.Cameras.Controls.FixedKeyControl;
+  player!: Player;
+
+  crunchSound!: Phaser.Sound.BaseSound;
+  longCrunchSound!: Phaser.Sound.BaseSound;
+  crunch2Sound!: Phaser.Sound.BaseSound;
+  clackSound!: Phaser.Sound.BaseSound;
+  clack2Sound!: Phaser.Sound.BaseSound;
 
   dustEmitter!: Phaser.GameObjects.Particles.ParticleEmitterManager;
+  puffEmitter!: Phaser.GameObjects.Particles.ParticleEmitterManager;
   crumbleEmitter!: Phaser.GameObjects.Particles.ParticleEmitterManager;
+  sparkEmitter!: Phaser.GameObjects.Particles.ParticleEmitterManager;
+  bloodEmitter!: Phaser.GameObjects.Particles.ParticleEmitterManager;
 
   map!: Phaser.Tilemaps.Tilemap;
   wallsLayer!: Phaser.Tilemaps.TilemapLayer;
@@ -24,7 +39,7 @@ export default class Game extends Phaser.Scene {
   tileCursor!: Phaser.GameObjects.Sprite;
 
   drills!: Phaser.GameObjects.Group;
-  wheels!: Phaser.GameObjects.Group;
+  wheels!: Phaser.Physics.Arcade.StaticGroup;
   enemies!: Phaser.GameObjects.Group;
   cannons!: Phaser.GameObjects.Group;
   workers!: Phaser.GameObjects.Group;
@@ -35,56 +50,119 @@ export default class Game extends Phaser.Scene {
   caveground!: Phaser.GameObjects.TileSprite;
   caveceiling!: Phaser.GameObjects.TileSprite;
 
-  enemySpawnRate: number = 2;
+  damagedTiles!: Map<string, number>;
+  destroyedTiles: number = 0;
+
+  enemySpawnRate: number = 10;
   enemyCooldown: number = 1;
   cannonCooldown: number = 0;
   boulderSpawnRate: number = 0.2;
   boulderCooldown: number = 0;
+
+  crawlerLifebar!: Lifebar;
+  moving: boolean = true;
 
   constructor() {
     super("GameScene");
   }
 
   preload() {
+    this.damagedTiles = new Map<string, number>();
+
+    this.sound.volume = 0.2;
+
+    this.load.audio("crunch", [
+      "assets/crunch.mp3",
+      "assets/crunch.ogg",
+      "assets/crunch.wav",
+    ]);
+
+    this.load.audio("longcrunch", [
+      "assets/longcrunch.mp3",
+      "assets/longcrunch.ogg",
+      "assets/longcrunch.wav",
+    ]);
+
+    this.load.audio("crunch2", [
+      "assets/crunch2.mp3",
+      "assets/crunch2.ogg",
+      "assets/crunch2.wav",
+    ]);
+
+    this.load.audio("clack", [
+      "assets/clack.mp3",
+      "assets/clack.ogg",
+      "assets/clack.wav",
+    ]);
+
+    this.load.audio("clack2", [
+      "assets/clack2.mp3",
+      "assets/clack2.ogg",
+      "assets/clack2.wav",
+    ]);
+
     this.load.image("tiles", "assets/tiles.png");
     this.load.image("bgtiles", "assets/bgtiles.png");
-    this.load.image("drill", "assets/drill.png");
-    this.load.image("enemy", "assets/enemy.png");
+
+    const drillConfig: Phaser.Types.Loader.FileTypes.ImageFrameConfig = {
+      frameWidth: 34,
+      frameHeight: 64,
+    };
+
+    this.load.spritesheet("drill", "assets/drill.png", drillConfig);
+
+    const smallSpriteConfig: Phaser.Types.Loader.FileTypes.ImageFrameConfig = {
+      frameWidth: 16,
+      frameHeight: 16,
+    };
+    const bigSpriteConfig: Phaser.Types.Loader.FileTypes.ImageFrameConfig = {
+      frameWidth: 32,
+      frameHeight: 32,
+    };
+
+    this.load.spritesheet("enemy", "assets/enemy.png", smallSpriteConfig);
+
     this.load.image("ammo", "assets/ammo.png");
     this.load.image("cannontower", "assets/cannontower.png");
     this.load.image("cannonhead", "assets/cannonhead.png");
-    this.load.image("worker", "assets/worker.png");
+    this.load.spritesheet("worker", "assets/worker.png", smallSpriteConfig);
     this.load.image("boulder", "assets/boulder.png");
-    this.load.image("dust", "assets/dust.png");
+    this.load.spritesheet("dust", "assets/dust.png", smallSpriteConfig);
     this.load.image("cavebg", "assets/cavebg.png");
     this.load.image("ground", "assets/ground.png");
     this.load.image("ceiling", "assets/ceiling.png");
     this.load.image("bggradient", "assets/bggradient.png");
-
-    const wheelConfig: Phaser.Types.Loader.FileTypes.ImageFrameConfig = {
-      frameWidth: 32,
-      frameHeight: 32,
-    };
-    this.load.spritesheet("wheels", "assets/wheels.png", wheelConfig);
-
-    const cursorConfig: Phaser.Types.Loader.FileTypes.ImageFrameConfig = {
-      frameWidth: 16,
-      frameHeight: 16,
-    };
-    this.load.spritesheet("cursor", "assets/cursor.png", cursorConfig);
+    this.load.spritesheet("spark", "assets/spark.png", smallSpriteConfig);
+    this.load.spritesheet("wheels", "assets/wheel.png", bigSpriteConfig);
+    this.load.spritesheet("cursor", "assets/cursor.png", smallSpriteConfig);
     this.load.tilemapTiledJSON("tilemap", "assets/tilemap.json");
   }
 
   create() {
+    this.crunchSound = this.sound.add("crunch");
+    this.longCrunchSound = this.sound.add("longcrunch");
+    this.crunch2Sound = this.sound.add("crunch2");
+
+    this.clackSound = this.sound.add("clack");
+    this.clack2Sound = this.sound.add("clack2");
+
+    createAnimations(this);
     this.enemies = this.add.group();
-    this.wheels = this.add.group();
+    this.wheels = this.physics.add.staticGroup();
     this.drills = this.add.group();
     this.cannons = this.add.group();
     this.ammo = this.add.group();
     this.boulders = this.add.group();
 
+    this.cannons.runChildUpdate = true;
+    this.enemies.runChildUpdate = true;
+    this.ammo.runChildUpdate = true;
+
     this.dustEmitter = createDustEmitter(this);
+    this.puffEmitter = createPuffEmitter(this);
     this.crumbleEmitter = createCrumbleEmitter(this);
+    this.sparkEmitter = createSparkEmitter(this);
+    this.bloodEmitter = createBloodEmitter(this);
 
     this.createTilemap();
     createDrill(this, this.objectLayer, this.drills);
@@ -151,14 +229,15 @@ export default class Game extends Phaser.Scene {
       down: cursors.down,
       speed: 0.5,
     };
-    this.controls = new Phaser.Cameras.Controls.FixedKeyControl(controlConfig);
-    this.cameras.main.centerOn(
-      this.initialCameraFocus.x,
-      this.initialCameraFocus.y
-    );
 
+    this.physics.add.collider(this.player, this.wallsLayer);
+    this.physics.add.collider(
+      this.player,
+      this.groundLayer,
+      this.destroySprite
+    );
     this.physics.add.collider(this.cannons, this.wallsLayer);
-    this.physics.add.overlap(this.ammo, this.wallsLayer, this.objectHitsWall);
+
     this.physics.add.collider(this.enemies, this.groundLayer);
     this.physics.add.collider(
       this.enemies,
@@ -166,19 +245,51 @@ export default class Game extends Phaser.Scene {
       this.objectHitsWall
     );
 
-    this.physics.add.collider(this.cannons, this.cannons);
+    this.physics.add.collider(this.cannons, this.cannons, this.destroyBoth);
     this.physics.add.overlap(this.ammo, this.enemies, this.ammoHitsEnemy);
+    this.physics.add.overlap(this.wheels, this.enemies, this.enemyEndsInWheels);
+
+    this.crawlerLifebar = new Lifebar(this, 10, 10);
+  }
+
+  destroySprite(
+    firstObject: Phaser.GameObjects.GameObject,
+    secondObject: Phaser.GameObjects.GameObject
+  ) {
+    if (firstObject instanceof Phaser.Physics.Arcade.Sprite) {
+      firstObject.destroy();
+    } else if (secondObject instanceof Phaser.Physics.Arcade.Sprite) {
+      secondObject.destroy();
+    }
+  }
+
+  enemyEndsInWheels(
+    enemy: Phaser.GameObjects.GameObject,
+    wheel: Phaser.GameObjects.GameObject
+  ) {
+    if (enemy instanceof Enemy) {
+      enemy.destroyInWheels();
+    }
+  }
+
+  destroyBoth(
+    firstObject: Phaser.GameObjects.GameObject,
+    secondObject: Phaser.GameObjects.GameObject
+  ) {
+    firstObject.destroy();
+    secondObject.destroy();
   }
 
   objectHitsWall(
     objectHitting: Phaser.GameObjects.GameObject,
-    walls: Phaser.GameObjects.GameObject
+    tile: Phaser.GameObjects.GameObject
   ) {
-    if (objectHitting instanceof Enemy) {
-      objectHitting.grab();
-    } else if (objectHitting instanceof Shot) {
-      console.log("ding");
-      this.ammo.destroy();
+    if (
+      objectHitting instanceof Enemy &&
+      objectHitting.isAttacking() &&
+      tile instanceof Phaser.Tilemaps.Tile
+    ) {
+      objectHitting.grab(tile);
     }
   }
 
@@ -194,54 +305,31 @@ export default class Game extends Phaser.Scene {
   }
 
   update(time: number, delta: number) {
-    this.controls.update(delta);
+    this.cameras.main.centerOn(this.player.x, this.player.y);
 
-    const pointer = this.input.activePointer;
+    this.enemies.children.each((enemy) => {
+      if (enemy instanceof Enemy) {
+        const grabbedTile = enemy.getGrabbedTile();
+        if (grabbedTile) {
+          const tileLocation = `${grabbedTile.x}x${grabbedTile.y}`;
+          const tileValue = this.damagedTiles.get(tileLocation) || 0;
+          this.damagedTiles.set(tileLocation, tileValue + 1);
+          enemy.clearGrabbedTile();
+        }
+      }
+    });
 
-    this.tileCursor.x = Math.floor(pointer.worldX / 16) * 16;
-    this.tileCursor.y = Math.floor(pointer.worldY / 16) * 16;
-    this.wheels.rotate(0.01);
-
-    this.enemyCooldown -= delta / 1000;
-
-    if (this.enemyCooldown < 0) {
-      this.enemyCooldown = this.enemySpawnRate;
-      this.objectLayer.objects
-        .filter((obj) => obj.name === "spawnpoint")
-        .forEach((obj) => {
-          const enemy = new Enemy(this, obj.x! + Math.random() * 100, obj.y!);
-          this.enemies.add(enemy);
-          this.add.existing(enemy);
-        });
-    }
-
-    if (this.cannonCooldown >= 0) {
-      this.cannonCooldown -= delta / 1000;
-    }
-    if (this.cannonCooldown < 0 && pointer.isDown) {
-      // TODO Make sure cursor is inside vehicle
-      const cannon = new Cannon(
-        this,
-        this.tileCursor.x,
-        this.tileCursor.y,
-        this.enemies,
-        this.ammo
-      );
-      cannon.setOrigin(0);
-      cannon.setDepth(10);
-
-      this.cannons.add(cannon);
-      this.add.existing(cannon);
-      this.physics.add.existing(cannon);
-      this.cannonCooldown = 3;
-    }
-
-    this.cannons.runChildUpdate = true;
-    this.enemies.runChildUpdate = true;
-    this.ammo.runChildUpdate = true;
+    this.damagedTiles.forEach((tileValue: number, tileLocation: string) => {
+      if (tileValue >= 3) {
+        const coords = tileLocation.split("x");
+        this.wallsLayer.removeTileAt(parseInt(coords[0]), parseInt(coords[1]));
+        this.destroyedTiles++;
+        this.crawlerLifebar.reduceLife(10);
+        this.damagedTiles.delete(tileLocation);
+      }
+    });
 
     this.ammo.children.each((ammo) => {
-      // console.log("processing");
       if (
         Math.round(ammo.body.velocity.x) === 0 &&
         Math.round(ammo.body.velocity.y) === 0
@@ -251,34 +339,81 @@ export default class Game extends Phaser.Scene {
       }
     });
 
-    if (this.boulderCooldown < 0) {
-      this.boulderCooldown = this.boulderSpawnRate;
-      const boulder = this.add.sprite(
-        this.map.widthInPixels + 100,
-        Math.random() * this.map.heightInPixels,
-        "boulder"
-      );
-      boulder.setDepth(-8);
+    if (this.moving) {
+      if (this.player) {
+        this.player.update(time, delta);
+      }
+      this.wheels.rotate(0.01);
 
-      boulder.rotation = Math.random() * Math.PI;
-      this.boulders.add(boulder);
-    } else {
-      this.boulderCooldown -= delta / 1000;
+      if (this.enemyCooldown < 0) {
+        this.enemyCooldown = this.enemySpawnRate;
+        this.objectLayer.objects
+          .filter((obj) => obj.name === "spawnpoint")
+          .forEach((obj) => {
+            const enemy = new Enemy(
+              this,
+              obj.x! + Math.random() * 100,
+              obj.y!,
+              this.bloodEmitter,
+              this.sparkEmitter
+            );
+            this.enemies.add(enemy);
+            this.add.existing(enemy);
+          });
+      } else {
+        this.enemyCooldown -= delta / 1000;
+      }
+
+      if (this.boulderCooldown < 0) {
+        this.boulderCooldown = this.boulderSpawnRate;
+        const boulder = this.add.sprite(
+          this.map.widthInPixels + 100,
+          Math.random() * this.map.heightInPixels,
+          "boulder"
+        );
+        boulder.setDepth(-8);
+
+        boulder.rotation = Math.random() * Math.PI;
+        this.boulders.add(boulder);
+      } else {
+        this.boulderCooldown -= delta / 1000;
+      }
+
+      // console.log(this.boulders, this.drills);
+      this.boulders.getChildren().forEach((boulder) => {
+        if (boulder && boulder instanceof Phaser.GameObjects.Sprite) {
+          boulder.x -= (10 * delta) / 1000;
+          if (boulder.x < this.map.widthInPixels - 80) {
+            this.crumbleEmitter.emitParticle(100, boulder.x - 48, boulder.y);
+            boulder.destroy();
+          }
+        }
+      });
+      this.cavebg.tilePositionX += 0.1;
+      this.caveground.tilePositionX += 0.15;
+      this.caveceiling.tilePositionX += 0.15;
     }
 
-    // console.log(this.boulders, this.drills);
-    this.boulders.getChildren().forEach((boulder) => {
-      if (boulder && boulder instanceof Phaser.GameObjects.Sprite) {
-        boulder.x -= (10 * delta) / 1000;
-        if (boulder.x < this.map.widthInPixels - 80) {
-          this.crumbleEmitter.emitParticle(100, boulder.x - 48, boulder.y);
-          boulder.destroy();
-        }
+    if (
+      (this.moving && this.crawlerLifebar.getLife() <= 0) ||
+      !this.player ||
+      !this.player.body
+    ) {
+      this.moving = false;
+      if (this.player && this.player.body) {
+        this.player.body.velocity.x = 0;
       }
-    });
-    this.cavebg.tilePositionX += 0.1;
-    this.caveground.tilePositionX += 0.15;
-    this.caveceiling.tilePositionX += 0.15;
+      this.dustEmitter.destroy();
+      // this.drills.destroy();
+      this.drills.children.each((drill) => drill.destroy());
+      this.tweens.killAll();
+      this.enemies.children.each((enemy) => {
+        if (enemy instanceof Enemy) {
+          enemy.startPartying();
+        }
+      });
+      this.cannons.children.each((cannon) => cannon.destroy());
+    }
   }
 
   createTilemap() {
@@ -288,16 +423,16 @@ export default class Game extends Phaser.Scene {
 
     this.map = this.make.tilemap(tilemapConfig);
 
-    const bgtiles = this.map.addTilesetImage("bgtiles", "bgtiles", 16, 16);
-    const bglayer = this.map.createLayer("background", "bgtiles", 0, 0);
+    const bgtiles = this.map.addTilesetImage("bgtiles", "tiles", 16, 16);
+    const bglayer = this.map.createLayer("background", "tiles", 0, 0);
 
     const tiles = this.map.addTilesetImage("tiles", "tiles", 16, 16);
     const layer = this.map.createLayer("walls", "tiles", 0, 0);
     this.wallsLayer = layer;
-    layer.setCollisionBetween(1, 10);
+    layer.setCollisionBetween(1, 64);
 
     this.groundLayer = this.map.createLayer("ground", "tiles", 0, 0);
-    this.groundLayer.setCollisionBetween(1, 10);
+    this.groundLayer.setCollisionBetween(1, 64);
 
     console.log(this.map);
     console.log("objects", this.map.getObjectLayer("objects").objects);
@@ -305,7 +440,6 @@ export default class Game extends Phaser.Scene {
     this.objectLayer = this.map.getObjectLayer("objects");
 
     let focus = this.findFromObjectLayer("camerafocus");
-
     if (!focus) {
       focus = { x: 0, y: 0 } as Phaser.Types.Tilemaps.TiledObject;
     }
@@ -315,6 +449,27 @@ export default class Game extends Phaser.Scene {
       Math.floor(focus.y!)
     );
     console.log("Focus", this.initialCameraFocus);
+
+    let playerLocation = this.findFromObjectLayer("player");
+    this.player = new Player(this, playerLocation.x!, playerLocation.y!);
+
+    this.objectLayer.objects
+      .filter((obj) => obj.name === "turret")
+      .forEach((turret) => {
+        const turretX = turret.x!;
+        const turretY = turret.y!;
+
+        const cannon = new Cannon(
+          this,
+          Math.floor(turretX / 16) * 16,
+          Math.floor(turretY / 16) * 16,
+          this.enemies,
+          this.ammo,
+          this.sparkEmitter,
+          this.puffEmitter
+        );
+        this.cannons.add(cannon);
+      });
   }
 
   findFromObjectLayer(name: string): Phaser.Types.Tilemaps.TiledObject {
@@ -324,5 +479,26 @@ export default class Game extends Phaser.Scene {
   createTileCursor() {
     this.tileCursor = this.add.sprite(0, 0, "cursor");
     this.tileCursor.setOrigin(0, 0);
+  }
+
+  playSound(sound: string) {
+    if (sound === "crunch") {
+      const randomSound = Math.random();
+      if (randomSound < 0.2) {
+        this.crunchSound.play();
+      } else if (randomSound < 0.5) {
+        this.longCrunchSound.play();
+      } else {
+        this.crunch2Sound.play();
+      }
+    }
+    if (sound === "clack") {
+      const randomSound = Math.random();
+      if (randomSound < 0.5) {
+        this.clackSound.play();
+      } else {
+        this.clack2Sound.play();
+      }
+    }
   }
 }

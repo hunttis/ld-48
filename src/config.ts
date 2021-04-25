@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 
-export default {
+const PhaserConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   parent: "game",
   backgroundColor: "#000000",
@@ -11,11 +11,14 @@ export default {
       gravity: { y: 100 },
     },
   },
+  pixelArt: true,
   scale: {
     width: 640,
     height: 400,
-    pixelArt: true,
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
+  audio: { noAudio: true, disableWebAudio: true },
 };
+
+export default PhaserConfig;
