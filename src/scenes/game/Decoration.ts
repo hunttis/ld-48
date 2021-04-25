@@ -12,6 +12,7 @@ export const createAnimations = (scene: Phaser.Scene) => {
   scene.anims.create({
     key: "playerWork",
     frames: scene.anims.generateFrameNumbers("worker", { frames: [4, 5] }),
+    frameRate: 5,
   });
 
   scene.anims.create({
@@ -157,7 +158,7 @@ export const createPuffEmitter = (scene: Phaser.Scene) => {
     x: 0,
     y: 0,
     gravityY: -100,
-    alpha: { start: 1, end: 0 },
+    alpha: { start: 0.5, end: 0 },
     lifespan: 1000,
     scale: { start: 0.5, end: 0, ease: "Quad.easeInOut" },
     quantity: 1,

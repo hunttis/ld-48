@@ -17,12 +17,39 @@ import Player from "./game/Player";
 
 export default class Game extends Phaser.Scene {
   player!: Player;
+  computer!: Phaser.GameObjects.Sprite;
 
   crunchSound!: Phaser.Sound.BaseSound;
   longCrunchSound!: Phaser.Sound.BaseSound;
   crunch2Sound!: Phaser.Sound.BaseSound;
   clackSound!: Phaser.Sound.BaseSound;
   clack2Sound!: Phaser.Sound.BaseSound;
+  fixSound!: Phaser.Sound.BaseSound;
+  placeSound!: Phaser.Sound.BaseSound;
+  rocksSound!: Phaser.Sound.BaseSound;
+
+  thunkSound!: Phaser.Sound.BaseSound;
+  thunk2Sound!: Phaser.Sound.BaseSound;
+  thunk3Sound!: Phaser.Sound.BaseSound;
+  thunk4Sound!: Phaser.Sound.BaseSound;
+
+  zapSound!: Phaser.Sound.BaseSound;
+  zap2Sound!: Phaser.Sound.BaseSound;
+  zap3Sound!: Phaser.Sound.BaseSound;
+  zap4Sound!: Phaser.Sound.BaseSound;
+  zap5Sound!: Phaser.Sound.BaseSound;
+
+  blorpSound!: Phaser.Sound.BaseSound;
+  blorp2Sound!: Phaser.Sound.BaseSound;
+  blorp3Sound!: Phaser.Sound.BaseSound;
+  blorp4Sound!: Phaser.Sound.BaseSound;
+  blorp5Sound!: Phaser.Sound.BaseSound;
+
+  clunkSound!: Phaser.Sound.BaseSound;
+  processSound!: Phaser.Sound.BaseSound;
+  splosionSound!: Phaser.Sound.BaseSound;
+  explosionSound!: Phaser.Sound.BaseSound;
+  bigexplosionSound!: Phaser.Sound.BaseSound;
 
   dustEmitter!: Phaser.GameObjects.Particles.ParticleEmitterManager;
   puffEmitter!: Phaser.GameObjects.Particles.ParticleEmitterManager;
@@ -37,6 +64,7 @@ export default class Game extends Phaser.Scene {
 
   initialCameraFocus!: Phaser.Math.Vector2;
   tileCursor!: Phaser.GameObjects.Sprite;
+  arrowSprite!: Phaser.GameObjects.Sprite;
 
   drills!: Phaser.GameObjects.Group;
   wheels!: Phaser.Physics.Arcade.StaticGroup;
@@ -51,16 +79,26 @@ export default class Game extends Phaser.Scene {
   caveceiling!: Phaser.GameObjects.TileSprite;
 
   damagedTiles!: Map<string, number>;
-  destroyedTiles: number = 0;
+  destroyedTiles: Phaser.Math.Vector2[] = [];
 
   enemySpawnRate: number = 10;
-  enemyCooldown: number = 1;
+  enemyCooldown: number = 3;
   cannonCooldown: number = 0;
   boulderSpawnRate: number = 0.2;
   boulderCooldown: number = 0;
 
+  fixCursor!: Phaser.GameObjects.Sprite;
+
   crawlerLifebar!: Lifebar;
   moving: boolean = true;
+  processableRock: number = 10;
+  processedRock: number = 0;
+
+  instructionsArrows!: Phaser.GameObjects.Text;
+  instructionsFixUse!: Phaser.GameObjects.Text;
+  processableRockText!: Phaser.GameObjects.Text;
+  processedRockText!: Phaser.GameObjects.Text;
+  finalScoreText!: Phaser.GameObjects.Text;
 
   constructor() {
     super("GameScene");
@@ -69,7 +107,33 @@ export default class Game extends Phaser.Scene {
   preload() {
     this.damagedTiles = new Map<string, number>();
 
-    this.sound.volume = 0.2;
+    this.sound.volume = 0.5;
+
+    this.load.audio("bigexplosion", "assets/bigexplosion.wav");
+    this.load.audio("explosion", "assets/explosion.wav");
+    this.load.audio("splosion", "assets/splosion.wav");
+    this.load.audio("process", "assets/process.wav");
+    this.load.audio("clunk", "assets/clunk.wav");
+    this.load.audio("thunk", "assets/thunk.wav");
+    this.load.audio("thunk2", "assets/thunk2.wav");
+    this.load.audio("thunk3", "assets/thunk3.wav");
+    this.load.audio("thunk4", "assets/thunk4.wav");
+
+    this.load.audio("zap", "assets/zap.wav");
+    this.load.audio("zap2", "assets/zap2.wav");
+    this.load.audio("zap3", "assets/zap3.wav");
+    this.load.audio("zap4", "assets/zap4.wav");
+    this.load.audio("zap5", "assets/zap5.wav");
+
+    this.load.audio("blorp", "assets/blorp.wav");
+    this.load.audio("blorp2", "assets/blorp2.wav");
+    this.load.audio("blorp3", "assets/blorp3.wav");
+    this.load.audio("blorp4", "assets/blorp4.wav");
+    this.load.audio("blorp5", "assets/blorp5.wav");
+
+    this.load.audio("fix", "assets/fix.wav");
+    this.load.audio("place", "assets/place.wav");
+    this.load.audio("rocks", "assets/rocks.wav");
 
     this.load.audio("crunch", [
       "assets/crunch.mp3",
@@ -122,6 +186,8 @@ export default class Game extends Phaser.Scene {
 
     this.load.spritesheet("enemy", "assets/enemy.png", smallSpriteConfig);
 
+    this.load.image("computer", "assets/computer.png");
+    this.load.image("arrow", "assets/arrow.png");
     this.load.image("ammo", "assets/ammo.png");
     this.load.image("cannontower", "assets/cannontower.png");
     this.load.image("cannonhead", "assets/cannonhead.png");
@@ -145,6 +211,33 @@ export default class Game extends Phaser.Scene {
 
     this.clackSound = this.sound.add("clack");
     this.clack2Sound = this.sound.add("clack2");
+
+    this.fixSound = this.sound.add("fix");
+    this.placeSound = this.sound.add("place");
+    this.rocksSound = this.sound.add("rocks");
+
+    this.thunkSound = this.sound.add("thunk");
+    this.thunk2Sound = this.sound.add("thunk2");
+    this.thunk3Sound = this.sound.add("thunk4");
+    this.thunk4Sound = this.sound.add("thunk4");
+
+    this.zapSound = this.sound.add("zap");
+    this.zap2Sound = this.sound.add("zap2");
+    this.zap3Sound = this.sound.add("zap4");
+    this.zap4Sound = this.sound.add("zap4");
+    this.zap5Sound = this.sound.add("zap5");
+
+    this.blorpSound = this.sound.add("blorp");
+    this.blorp2Sound = this.sound.add("blorp2");
+    this.blorp3Sound = this.sound.add("blorp4");
+    this.blorp4Sound = this.sound.add("blorp4");
+    this.blorp5Sound = this.sound.add("blorp5");
+
+    this.clunkSound = this.sound.add("clunk");
+    this.processSound = this.sound.add("process");
+    this.explosionSound = this.sound.add("explosion");
+    this.splosionSound = this.sound.add("splosion");
+    this.bigexplosionSound = this.sound.add("bigexplosion");
 
     createAnimations(this);
     this.enemies = this.add.group();
@@ -249,7 +342,60 @@ export default class Game extends Phaser.Scene {
     this.physics.add.overlap(this.ammo, this.enemies, this.ammoHitsEnemy);
     this.physics.add.overlap(this.wheels, this.enemies, this.enemyEndsInWheels);
 
-    this.crawlerLifebar = new Lifebar(this, 10, 10);
+    this.fixCursor = this.add.sprite(200, 200, "cursor");
+
+    this.instructionsArrows = this.add
+      .text(
+        1,
+        this.map.heightInPixels - 24,
+        "Use arrows to move, and jump. Space to shoot."
+      )
+      .setFontSize(14);
+    this.instructionsArrows.setDepth(100);
+    this.instructionsArrows.setScrollFactor(0, 0);
+    this.instructionsArrows = this.add
+      .text(
+        1,
+        this.map.heightInPixels - 6,
+        "Hold X to work: Fix enemy broken walls and use computer to process rock."
+      )
+      .setFontSize(14);
+
+    this.instructionsArrows.setDepth(100);
+    this.instructionsArrows.setScrollFactor(0, 0);
+
+    const healthText = this.add
+      .text(1, 1, "Minecrawler health:")
+      .setFontSize(16)
+      .setScrollFactor(0, 0);
+    this.crawlerLifebar = new Lifebar(this, 100, 1);
+
+    this.processableRockText = this.add
+      .text(1, 16, "Processable rock: 0")
+      .setScrollFactor(0, 0)
+      .setFontSize(14);
+
+    this.processedRockText = this.add
+      .text(
+        this.processableRockText.width + 200,
+        16,
+        "Processed rock (score): 0"
+      )
+      .setScrollFactor(0, 0)
+      .setFontSize(14);
+
+    this.finalScoreText = this.add
+      .text(
+        this.map.widthInPixels / 2,
+        this.map.heightInPixels / 2,
+        "FINAL SCORE: ",
+        { fontFamily: "Arial Black", color: "#000000" }
+      )
+      .setStroke("#ffffff", 10)
+      .setFontSize(24)
+      .setDepth(100);
+
+    this.finalScoreText.visible = false;
   }
 
   destroySprite(
@@ -307,13 +453,25 @@ export default class Game extends Phaser.Scene {
   update(time: number, delta: number) {
     this.cameras.main.centerOn(this.player.x, this.player.y);
 
+    if (time / 1000 < 10) {
+      this.enemySpawnRate = 10;
+    } else if (time / 1000 < 30) {
+      this.enemySpawnRate = 8;
+    } else if (time / 1000 < 50) {
+      this.enemySpawnRate = 6;
+    } else if (time / 1000 < 70) {
+      this.enemySpawnRate = 4;
+    } else if (time / 1000 < 90) {
+      this.enemySpawnRate = 2;
+    } else {
+      this.enemySpawnRate = 0.5;
+    }
+
     this.enemies.children.each((enemy) => {
       if (enemy instanceof Enemy) {
         const grabbedTile = enemy.getGrabbedTile();
         if (grabbedTile) {
-          const tileLocation = `${grabbedTile.x}x${grabbedTile.y}`;
-          const tileValue = this.damagedTiles.get(tileLocation) || 0;
-          this.damagedTiles.set(tileLocation, tileValue + 1);
+          this.damageTile(grabbedTile);
           enemy.clearGrabbedTile();
         }
       }
@@ -323,9 +481,12 @@ export default class Game extends Phaser.Scene {
       if (tileValue >= 3) {
         const coords = tileLocation.split("x");
         this.wallsLayer.removeTileAt(parseInt(coords[0]), parseInt(coords[1]));
-        this.destroyedTiles++;
+        this.destroyedTiles.push(
+          new Phaser.Math.Vector2(parseInt(coords[0]), parseInt(coords[1]))
+        );
         this.crawlerLifebar.reduceLife(10);
         this.damagedTiles.delete(tileLocation);
+        this.playSound("explosion");
       }
     });
 
@@ -334,7 +495,6 @@ export default class Game extends Phaser.Scene {
         Math.round(ammo.body.velocity.x) === 0 &&
         Math.round(ammo.body.velocity.y) === 0
       ) {
-        console.log("boom");
         ammo.destroy();
       }
     });
@@ -349,6 +509,7 @@ export default class Game extends Phaser.Scene {
         this.enemyCooldown = this.enemySpawnRate;
         this.objectLayer.objects
           .filter((obj) => obj.name === "spawnpoint")
+          .filter((obj) => Math.random() < 0.75)
           .forEach((obj) => {
             const enemy = new Enemy(
               this,
@@ -379,16 +540,30 @@ export default class Game extends Phaser.Scene {
         this.boulderCooldown -= delta / 1000;
       }
 
-      // console.log(this.boulders, this.drills);
       this.boulders.getChildren().forEach((boulder) => {
         if (boulder && boulder instanceof Phaser.GameObjects.Sprite) {
           boulder.x -= (10 * delta) / 1000;
           if (boulder.x < this.map.widthInPixels - 80) {
             this.crumbleEmitter.emitParticle(100, boulder.x - 48, boulder.y);
+            this.processableRock += 0.2;
+            this.playSound("rocks");
             boulder.destroy();
           }
         }
       });
+
+      const newProcessedRockText =
+        "Processed rock (score): " + this.processedRock.toFixed(0);
+      if (this.processedRockText.text != newProcessedRockText) {
+        this.processedRockText.text = newProcessedRockText;
+      }
+
+      const newProcessableRockText =
+        "Processable rock: " + this.processableRock.toFixed(0);
+      if (this.processableRockText.text != newProcessableRockText) {
+        this.processableRockText.text = newProcessableRockText;
+      }
+
       this.cavebg.tilePositionX += 0.1;
       this.caveground.tilePositionX += 0.15;
       this.caveceiling.tilePositionX += 0.15;
@@ -404,7 +579,6 @@ export default class Game extends Phaser.Scene {
         this.player.body.velocity.x = 0;
       }
       this.dustEmitter.destroy();
-      // this.drills.destroy();
       this.drills.children.each((drill) => drill.destroy());
       this.tweens.killAll();
       this.enemies.children.each((enemy) => {
@@ -413,7 +587,13 @@ export default class Game extends Phaser.Scene {
         }
       });
       this.cannons.children.each((cannon) => cannon.destroy());
+      this.playSound("bigexplosion");
+      this.finalScoreText.visible = true;
+      this.finalScoreText.text =
+        "FINAL SCORE: " + this.processedRock.toFixed(0);
     }
+
+    this.arrowSprite.visible = this.processableRock > 1;
   }
 
   createTilemap() {
@@ -421,10 +601,15 @@ export default class Game extends Phaser.Scene {
       key: "tilemap",
     };
 
+    console.log("creating tile map");
     this.map = this.make.tilemap(tilemapConfig);
 
+    console.log("Creating bg tiles");
     const bgtiles = this.map.addTilesetImage("bgtiles", "tiles", 16, 16);
+
+    console.log("Creating bg layer");
     const bglayer = this.map.createLayer("background", "tiles", 0, 0);
+    // bglayer.visible = false;
 
     const tiles = this.map.addTilesetImage("tiles", "tiles", 16, 16);
     const layer = this.map.createLayer("walls", "tiles", 0, 0);
@@ -452,6 +637,28 @@ export default class Game extends Phaser.Scene {
 
     let playerLocation = this.findFromObjectLayer("player");
     this.player = new Player(this, playerLocation.x!, playerLocation.y!);
+
+    let computerLocation = this.findFromObjectLayer("computer");
+    this.computer = this.add.sprite(
+      Math.floor(computerLocation.x! / 16) * 16,
+      Math.floor(computerLocation.y! / 16) * 16,
+      "computer"
+    );
+    this.computer.setOrigin(0, 0);
+
+    this.arrowSprite = this.add.sprite(
+      Math.floor(computerLocation.x! / 16) * 16 + 8,
+      Math.floor(computerLocation.y! / 16) * 16 - 10,
+      "arrow"
+    );
+
+    this.tweens.add({
+      targets: this.arrowSprite,
+      y: this.arrowSprite.y - 10,
+      repeat: -1,
+      yoyo: true,
+      ease: "Quad.easeInOut",
+    });
 
     this.objectLayer.objects
       .filter((obj) => obj.name === "turret")
@@ -481,6 +688,12 @@ export default class Game extends Phaser.Scene {
     this.tileCursor.setOrigin(0, 0);
   }
 
+  damageTile(tile: Phaser.Tilemaps.Tile) {
+    const tileLocation = `${tile.x}x${tile.y}`;
+    const tileValue = this.damagedTiles.get(tileLocation) || 0;
+    this.damagedTiles.set(tileLocation, tileValue + 1);
+  }
+
   playSound(sound: string) {
     if (sound === "crunch") {
       const randomSound = Math.random();
@@ -492,12 +705,91 @@ export default class Game extends Phaser.Scene {
         this.crunch2Sound.play();
       }
     }
+
     if (sound === "clack") {
       const randomSound = Math.random();
       if (randomSound < 0.5) {
         this.clackSound.play();
       } else {
         this.clack2Sound.play();
+      }
+    }
+
+    if (sound === "process") {
+      if (!this.processSound.isPlaying) {
+        this.processSound.play();
+      }
+    }
+
+    if (sound === "place") {
+      this.placeSound.play();
+    }
+
+    if (sound === "fix") {
+      if (!this.fixSound.isPlaying) {
+        this.fixSound.play();
+      }
+    }
+
+    if (sound === "rocks") {
+      if (!this.rocksSound.isPlaying) {
+        this.rocksSound.play();
+      }
+    }
+
+    if (sound === "bigexplosion") {
+      this.bigexplosionSound.play();
+    }
+
+    if (sound === "explosion") {
+      const randomSound = Math.random();
+      if (randomSound < 0.5) {
+        this.explosionSound.play();
+      } else {
+        this.splosionSound.play();
+      }
+    }
+
+    if (sound === "thunk") {
+      const randomSound = Math.random();
+      if (randomSound < 0.25) {
+        this.thunkSound.play();
+      } else if (randomSound < 0.5) {
+        this.thunk2Sound.play();
+      } else if (randomSound < 0.75) {
+        this.thunk3Sound.play();
+      } else {
+        this.thunk4Sound.play();
+      }
+    }
+
+    if (sound === "zap") {
+      const randomSound = Math.random();
+      if (randomSound < 0.2) {
+        this.zapSound.play();
+      } else if (randomSound < 0.4) {
+        this.zap2Sound.play();
+      } else if (randomSound < 0.6) {
+        this.zap3Sound.play();
+      } else if (randomSound < 0.8) {
+        this.zap4Sound.play();
+      } else {
+        this.zap5Sound.play();
+      }
+    }
+
+    if (sound === "blorp") {
+      const randomSound = Math.random();
+      if (randomSound < 0.2) {
+        this.blorpSound.play();
+      } else if (randomSound < 0.4) {
+        this.blorp2Sound.play();
+      } else if (randomSound < 0.6) {
+        this.blorp3Sound.play();
+      } else if (randomSound < 0.8) {
+        this.blorp4Sound.play();
+      } else {
+        this.blorp5Sound.play();
       }
     }
   }

@@ -16,8 +16,8 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
 
   enemyState: EnemyState;
   stateCooldown: number;
-  attackCooldown: number = 0;
-  attackCooldownMax: number = 1;
+  attackCooldown: number = 2;
+  attackCooldownMax: number = 2;
 
   sparkEmitter!: Phaser.GameObjects.Particles.ParticleEmitterManager;
   bloodEmitter!: Phaser.GameObjects.Particles.ParticleEmitterManager;
@@ -116,6 +116,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.enemyState = EnemyState.Grabbing;
     if (tile instanceof Phaser.Tilemaps.Tile) {
       this.grabbedTile = tile;
+      this.parent.playSound("thunk");
     }
   }
 

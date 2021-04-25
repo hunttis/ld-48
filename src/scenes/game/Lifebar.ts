@@ -46,6 +46,14 @@ export default class Lifebar extends Phaser.GameObjects.Graphics {
     this.draw();
   }
 
+  addLife(value: number) {
+    this.value += value;
+    if (this.value < 0) {
+      this.value = 0;
+    }
+    this.draw();
+  }
+
   getLife() {
     return this.value;
   }

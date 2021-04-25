@@ -104,7 +104,7 @@ export default class Cannon extends Phaser.Physics.Arcade.Sprite {
         shot.setCollideWorldBounds(false);
         shot.body.setCircle(2);
         this.ammo.add(shot);
-        this.parent.playSound("clack");
+        this.parent.playSound("blorp");
       }
     }
   }
